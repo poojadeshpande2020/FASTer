@@ -1,0 +1,78 @@
+from app import db
+from app import Intakequestions
+from app import Consult
+from app import Patients
+from app import Physician
+from datetime import datetime
+
+#If first time running app
+db.create_all()
+#db.drop_all()
+			
+#Build Script for tables
+			
+physician1  = Physician(physicianID = 1234,
+	physicianFirstName = 'John',
+    physicianLastName =  'Smith',
+    physicianSpecialty = 'Neurology',
+    physicianCredential = 'MD',
+	physicianShiftStartTime = datetime(2020, 1, 1, 10, 10, 10),
+    physicianShiftEndTime = datetime(2021, 1, 1, 10, 10, 10)
+    )
+db.session.add(physician1)
+db.session.commit()
+
+physician2  = Physician(physicianID = 12345,
+	physicianFirstName = 'Jane',
+    physicianLastName =  'Smith',
+    physicianSpecialty = 'Neurology',
+    physicianCredential = 'MD',
+	physicianShiftStartTime = datetime(2020, 1, 1, 10, 10, 10),
+    physicianShiftEndTime = datetime(2021, 1, 1, 10, 10, 10)
+    )
+db.session.add(physician2)
+db.session.commit()
+
+
+patient1 = Patients (patientID = '111111',
+    patientFirstName = 'Donald' ,
+    patientLastName = 'Trump',
+    patientAddress1 = '123 Jefferson Way',
+    patientAddress2 = "Unit 123",
+    patientCity = 'Jefferson',
+    patientState = 'VA',
+    patientZip = '45678',
+    patientGender = 'M',
+    patientDOB = '1980-01-01',
+    insuranceID = 'BCBS010203',
+    insuranceCarrier = 'Blue Cross Blue Shield'
+)
+db.session.add(patient1)
+db.session.commit()
+
+patient2 = Patients (patientID = '123456',
+    patientFirstName = 'Beyonce' ,
+    patientLastName = 'Knowles',
+    patientAddress1 = '123 New York Way',
+    patientAddress2 = "Unit 123",
+    patientCity = 'New York',
+    patientState = 'New York',
+    patientZip = '45678',
+    patientGender = 'F',
+    patientDOB = '1980-01-01',
+    insuranceID = 'BCBS010204',
+    insuranceCarrier = 'Blue Cross Blue Shield'
+)
+db.session.add(patient2)
+db.session.commit()
+
+
+#Queries
+Intakequestions.query.all()
+Patients.query.all()
+Consult.query.all()
+Physician.query.all()
+
+#Queries with filters
+Intakequestions.query.filter_by(patientSymptoms = '').first().intakeID
+Intakequestions.query.filter_by(intakeID = '316071', patientSymptoms = '').first().course

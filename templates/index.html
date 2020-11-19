@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta http-equiv="pragma" content="no-cache" />
+    <meta http-equiv="expires" content="-1" />
+    <title>FASTer</title>
+    <link rel="stylesheet" href="static/css/bootstrap.css">
+    <link rel="stylesheet" href="static/css/app.css">
+    <link rel="preconnect" href="https://fonts.gstatic.com">
+    <link href="https://fonts.googleapis.com/css2?family=Lato&display=swap" rel="stylesheet">
+    <!-- <link href="https://fonts.googleapis.com/css?family=IBM+Plex+Sans&display=swap" rel="stylesheet"> -->
+    <script src="static/js/jquery-3.4.1.min.js"></script>
+</head>
+
+<body>
+    <section style="min-height: 85vh;">
+        <div class="container-fluid" style="margin-top: 50px;">
+                <!-- Application Title -->
+            <div class = "row justify-content-center">
+                <div class="col-md-12 title-section">
+                    <h1 class = "text-center"><b>F A S T e r</b></h1>
+                </div>
+            
+                <!-- ChatBox -->
+
+                <div class = "centered">
+                    <div id="chatbox" class="panel-heading chatbox clearfix">
+                            <div class="panel-title reply">{{ display_text }}</div>
+                    </div>
+                
+                    <div class="input-group">
+                        <input id="text-input" type="text" name="input" class="form-control border-top-0"/>
+                        <div class="input-group-append">
+                            <button id="submit" type="submit" class="btn btn-primary" onclick="sendRequest();">Send</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+                <!-- /ChatBox -->
+            
+        </div>
+    </section>
+    <section>
+        <div class="container-fluid">
+            <footer class="footer text-center sizing">
+                <br/>
+                <p>Developed by MSIS students at Northwestern University<br>Michael Fominoff | Mona Giridhar | Pooja Deshpande</p>  
+            </footer>
+        </div>
+    </section>
+</body>
+
+<script type="text/javascript">
+    let state = 0.0
+    let matches = []
+    const defaultLoadingMessage = "FASTeris thinking"
+    const secretLoadingMessages = ['Give us a second, our bot escaped', 'Our intern is typing your answer for you']
+
+    // sends request to Flask containing user input and state of conversation
+    function sendRequest() {
+        let input = $("#text-input").val();
+        $("#chatbox").append('<div class="panel-title message">' + input + '</div>')
+        $("#text-input").val("");
+        
+        // // input validation when user must select a number
+        // if (state == 2) {
+        //     if (isNaN(input)) {
+        //         $("#chatbox").append('<div class="panel-title reply">Please type in one of the numerical options above.</div>')
+        //         return
+        //     }
+        //     input = matches[parseInt(input) - 1]
+        // }
+
+        let loadingMessage = Math.floor(Math.random() * 10) < 5 ? defaultLoadingMessage : secretLoadingMessages[Math.floor(Math.random() * secretLoadingMessages.length)]
+        let loadingTimeout = setTimeout(() => $("#chatbox").append(`<div class="panel-title reply loading"><i>${loadingMessage}</div>`), 1000)
+
+        $.ajax({
+            type: "POST",
+            url: "{{ url_for('chat') }}",
+            data: JSON.stringify({"input": input,
+                    "state": state}),
+            contentType: "application/json",
+            success: function(data) {
+                clearTimeout(loadingTimeout)
+                $(".loading").remove()
+                $("#chatbox").append('<div class="panel-title reply">' + data["response"] + '</div>')
+                state = data["state"];
+                matches = data["matches"]
+            }
+        });
+    }
+
+    // send message when user presses enter
+    $("#text-input").keypress(function(key) {
+        if (key.which == 13) {
+            sendRequest();
+            return false;
+        }
+    });
+</script>
+
+</html>

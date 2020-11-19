@@ -1,0 +1,9 @@
+strsim
+numpy
+flask
+pandas
+spacy
+nltk
+sklearn
+
+
