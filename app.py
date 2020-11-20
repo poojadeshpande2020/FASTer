@@ -8,12 +8,13 @@ from main_copy import question_12,question_13,question_14,question_15,spelling_s
 import json
 import main_copy
 import pickle
-from xml_creation import create_xml
+#from xml_creation import create_xml
 import xml.etree.cElementTree as ET
 from sqlalchemy.types import PickleType
 from random import randint
+from sqlalchemy import func, and_
 
-
+#Create the app
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///faster.db'
 db = SQLAlchemy(app)
@@ -105,14 +106,109 @@ class Physician(db.Model):
         return f"Physician('{self.physicianID}', '{self.physicianFirstName}','{self.physicianLastName}','{self.physicianSpecialty}','{self.physicianCredential}','{self.physicianShiftStartTime}','{self.physicianShiftEndTime}','{self.createdDatetime}','{self.createdBy}','{self.updatedDatetime}','{self.updatedBy}')"
 
 def listToString(s):  
-    
+    """Converts a list to string"""
     str1 = ', '.join(s)
     return str1 
 
 def random_with_N_digits(n):
+    """Generate a random number with n digits"""
     range_start = 10**(n-1)
     range_end = (10**n)-1
     return randint(range_start, range_end)
+
+def queryIntakeID (storage):
+
+    subq = db.session.query(Consult.patientID, func.max(Consult.consultCreatedDatetime).label('maxdate')).group_by(Consult.patientID).subquery('t2')
+    query = db.session.query(Consult).join (subq, and_(Consult.patientID == subq.c.patientID, Consult.consultCreatedDatetime == subq.c.maxdate))
+    intakeID = query.filter_by(patientID = storage[0]).first().intakeID
+    return str(intakeID)
+    
+def querycreatedDate(storage):
+    createDate = Intakequestions.query.filter_by(intakeID = queryIntakeID(storage)).first().createdDate
+    return str(createDate)
+
+def queryupdatedDate(storage):
+    updatedDate = Intakequestions.query.filter_by(intakeID = queryIntakeID(storage)).first().updatedDate
+    return str(updatedDate)
+
+def create_xml(storage):
+    """Populate the XML file with the items from the database and the items from the 
+    chatbot interaction"""
+    patientID = storage[0]
+    patientFirstName = Patients.query.filter_by(patientID = storage[0]).first().patientFirstName
+    patientLastName = Patients.query.filter_by(patientID = storage[0]).first().patientLastName
+    patientAddress = Patients.query.filter_by(patientID = storage[0]).first().patientAddress1
+    patientCity = Patients.query.filter_by(patientID = storage[0]).first().patientCity
+    patientState = Patients.query.filter_by(patientID = storage[0]).first().patientState
+    patientZip = Patients.query.filter_by(patientID = storage[0]).first().patientZip
+    patientGender = Patients.query.filter_by(patientID = storage[0]).first().patientGender
+    patientDOB = Patients.query.filter_by(patientID = storage[0]).first().patientDOB
+    insuranceID = Patients.query.filter_by(patientID = storage[0]).first().insuranceID
+    insuranceCarrier = Patients.query.filter_by(patientID = storage[0]).first().insuranceCarrier
+    intakeID = queryIntakeID (storage)
+    patientSymptoms = ', '.join(storage[1])
+    symptomSeverity = storage[2]
+    patientOriented = storage[3]
+    patientUnderstandsYou = storage[4]
+    youUnderstandPatient = storage[5]
+    symptoms = storage[6]
+    course = storage[7]
+    precipitatingFactors = storage[8]
+    associatedFeatures = ', '.join(storage[9])
+    previousEpisodes = storage[10]
+    pastMedicalHistory = ', '.join(storage[11])
+    allergies = storage[12]
+    drugHistory = ', '.join(storage[13])
+    familyHistoryOfStroke = storage[14]
+    socialHistory = storage[15]
+    createdDate= querycreatedDate(storage)
+    createdBy = "SYSADMIN"
+    updatedDate = queryupdatedDate(storage)
+    updatedBy = "SYSADMIN"
+    physicianID = '1234'
+    phyisicanFirstName = Physician.query.filter_by(physicianID = '1234').first().physicianFirstName
+    physicianLastName = Physician.query.filter_by(physicianID = '1234').first().physicianFirstName
+
+    root = ET.Element("patientevaluation")
+    doc = ET.SubElement(root, "record")
+
+    ET.SubElement(doc, "patientID").text = patientID
+    ET.SubElement(doc, "patientFirstName").text = patientFirstName
+    ET.SubElement(doc, "patientLastName").text = patientLastName
+    ET.SubElement(doc, "patientAddress").text = patientAddress
+    ET.SubElement(doc, "patientCity").text = patientCity
+    ET.SubElement(doc, "patientState").text = patientState
+    ET.SubElement(doc, "patientZip").text = patientZip
+    ET.SubElement(doc, "patientGender").text = patientGender
+    ET.SubElement(doc, "patientDOB").text = patientDOB
+    ET.SubElement(doc, "insuranceID").text = insuranceID
+    ET.SubElement(doc, "insuranceCarrier").text = insuranceCarrier
+    ET.SubElement(doc, "intakeID").text = intakeID
+    ET.SubElement(doc, "patientSymptoms").text = patientSymptoms
+    ET.SubElement(doc, "symptomSeverity").text = symptomSeverity
+    ET.SubElement(doc, "patientOriented").text = patientOriented
+    ET.SubElement(doc, "patientUnderstandsYou").text = patientUnderstandsYou
+    ET.SubElement(doc, "youUnderstandPatient").text = youUnderstandPatient
+    ET.SubElement(doc, "symptoms").text = symptoms
+    ET.SubElement(doc, "course").text = course
+    ET.SubElement(doc, "precipitatingFactors").text = precipitatingFactors
+    ET.SubElement(doc, "associatedFeatures").text = associatedFeatures
+    ET.SubElement(doc, "pastMedicalHistory").text = pastMedicalHistory
+    ET.SubElement(doc, "allergies").text = allergies
+    ET.SubElement(doc, "drugHistory").text = drugHistory
+    ET.SubElement(doc, "familyHistoryOfStroke").text = familyHistoryOfStroke
+    ET.SubElement(doc, "socialHistory").text = socialHistory
+    ET.SubElement(doc, "createdDate").text = createdDate
+    ET.SubElement(doc, "createdBy").text = createdBy
+    ET.SubElement(doc, "updatedDate").text = updatedDate
+    ET.SubElement(doc, "updatedBy").text = updatedBy
+    ET.SubElement(doc, "physicianID").text = physicianID
+    ET.SubElement(doc, "phyisicanFirstName").text = phyisicanFirstName
+    ET.SubElement(doc, "physicianLastName").text = physicianLastName
+
+    tree = ET.ElementTree(root)
+    tree.write("filename.xml")
+    return None
 
  
 # state that the conversation with the chatbot is in
@@ -141,32 +237,50 @@ states = {
 }
 
 model_endpoint = "http://0.0.0.0:5000/model/predict"
+#Create a global variable to store the responses
 store = []
+
+def retrieveAllPatientIDs():
+    """Dumps all the patient IDs into a list, stores it as a pickle object.
+    This will be used in main_copy.py to validate the patientID information"""
+    query = db.session.query(Patients.patientID.distinct().label("patientID"))
+    patientIDs = [row.patientID for row in query.all()]
+    with open('patientList.txt','wb') as patientList:
+        pickle.dump(patientIDs,patientList)
+    return None
+
+#Call the function
+retrieveAllPatientIDs()
 
 @app.route('/')
 @app.route('/login')
 def login():
+    """User login page"""
     return render_template('login.html')
 
 @app.route("/index.html", methods=["POST", "GET", "HEAD"])
 def chat():
+    """Chatbot interaction"""
     global store
     if request.method == "POST":
         '''Process an ongoing conversation.'''
         data = json.loads(request.data)
         input_text = data["input"]
         state = float(data["state"])
+        #If the state is zero, clear the contents of store variable. (Restart the conversation)
         if state == 0.0:
             store = []
 
         # gets name of the next function based on state that conversation with chatbot is in
         get_next_text = states.get(state)
-
+        #Goes to 'states' dictionary, retrieves the function, processes the response and returns the next question to ask
         response, new_state, info = get_next_text(model_endpoint, input_text)
         store.append(info)
+        #If chatbot has reached the last state, clean up the store variable, insert processed responses into the database
         if new_state == 16.0:
             if {} in store: 
                 store = [value for value in store if value!= {}]
+            #Insert responses in database   
             resp = Intakequestions(intakeID = random_with_N_digits(6)
                        , patientSymptoms = listToString(store[1])
                        , patientOriented = store[2]
@@ -186,6 +300,7 @@ def chat():
                       )
             db.session.add(resp)
             db.session.commit()
+            #Assign physician
             consult = Consult (consultID = random_with_N_digits(6)
                        , intakeID = resp.intakeID
                        , patientID = store[0] #Patient ID is stored here
@@ -194,8 +309,11 @@ def chat():
                        )
             db.session.add(consult)
             db.session.commit()
+            #Dump store contents into a pickle object (more for testing purposes)
             with open('file.txt','wb') as f:
                 pickle.dump(store,f)
+
+            #Create the XML file with the stored responses
             create_xml(store)
         return jsonify({"response": response, "state": new_state, "matches": info})
 

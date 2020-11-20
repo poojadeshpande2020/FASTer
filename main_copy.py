@@ -1,9 +1,6 @@
 #!/usr/bin/env python
 # coding: utf-8
-
-# In[1]:
-
-
+#Import all required libraries
 import pandas as pd
 import numpy as np
 import spacy
@@ -19,38 +16,20 @@ import string
 import os
 import random
 import pickle
-
 from building_spacy_model import load_model,detected_keywords
 from spacy import displacy
 
-
-# In[2]:
-
-
+#Load the spacy models
 ner1 = load_model('./spacy_model_symptoms_final')
 ner2 = load_model('./spacy_model_drugs_final')
 
-
-# In[3]:
-
-
+#Load spellcheck models
 with open('./spellchecker1','rb') as f_d:
     symspell1 = pickle.load(f_d)
-
-
-# In[4]:
-
-
 with open('./spellchecker2','rb') as f:
     symspell2 = pickle.load(f)
 
-
-# # Chatbot functions
-
-# In[5]:
-
-
-#may be add more words like (patient,has,the, experiencing) Then ask for symptom suggestions. did you mean so and so.
+#Process stopwords
 sw = set(stopwords.words('english'))
 remove_words = ['no','not']
 add_words = ['patient','showing','experiencing']
@@ -59,8 +38,7 @@ new_sw = new_sw.union(add_words)
 
 def preprocess(user_input):
     """Returns a lower case sentence WITHOUT punctuation, digits and stop words"""
-    #Remove punctuation
-    #user_input = user_input.translate(str.maketrans('','',string.punctuation))
+
     #Tokenize
     tokens = word_tokenize(user_input)
     #Remove punctuation
@@ -74,27 +52,32 @@ def preprocess(user_input):
     #Returns a sentence
     return ' '.join(tokens)
     
-
-# In[7]:
 def spellcheck2(user_input,spell_obj):
+    """Returns a dataframe consisting of 2 suggestions for the misspelled word"""
     global new_sw
+    #Tokenize the sentence
     words = word_tokenize(user_input)
     data = []
     for word in words:
         row = []
         suggestions = spell_obj.lookup(word,verbosity = 2,max_edit_distance = 3,include_unknown = False,transfer_casing = False)
+        #If there are no suggestions then move onto the next word
         if len(suggestions) == 0:
             continue
-        
+        #Take top two suggestions
         for s in suggestions[:2]:
             correct = str(s).split(',')[0]
             if (correct in new_sw) or (correct == word):
                 break
+            #Insert the misspelled word in the list
             if len(row) == 0:
                 row.append(word)
+            #Append the correction
             row.append(correct)
+        #If there's only one suggestion then insert ' ' in the second column
         if len(row) >0 and len(row)<3:
             row.append('')
+        #Insert 'none of the above' in the last column
         if len(row)==3:    
             row.append('none of the above')
             data.append(row)
@@ -116,6 +99,7 @@ def extraction(user_input,ner_obj):
     return detected_entities
 
 def numbered_print(row):
+    """Returns text that offers spelling suggestions for the misspelled word"""
     o = []
     final = "Please choose a number which describes the appropriate correction for the misspelled word : '{}'\n".format(row['misspelled'])
     for i,s in enumerate(row.index[1:]):
@@ -125,15 +109,19 @@ def numbered_print(row):
     return final,o
 
 def replace_word(row,userinput,orig_sent):
+    """replace the misspelled word with the chosen correction"""
     misspelled = row['misspelled']
     correct_word = row[userinput]
     new_sent = orig_sent.replace(misspelled,correct_word,1)
     return new_sent
 
-#Global variable
+#Global variables
 orig_sent = ""
 d = pd.DataFrame()
 options = []
+#Load the patient list
+with open('patientList.txt','rb') as patientList:
+        patient_list = pickle.load(patientList)
 
 # # Building the chatbot workflow
 def get_opening_message():
@@ -141,17 +129,21 @@ def get_opening_message():
     return "Hi, my name is FASTer!\nI will be helping you with stroke patient intake.\nPlease enter the six digit patient ID" 
 
 def patient_id(model_endpoint,userinput):
+    """Processes patient id, validates against the patient list, returns the next Q if all goes okay"""
+    global patient_list
     patient_id = userinput.strip()
-    if not patient_id.isdigit() or len(patient_id)!=6:
-        return "Please enter a six digit patient ID",0,{}
+    if not patient_id.isdigit() or int(patient_id) not in patient_list:
+        return "Please enter a valid six digit patient ID",0,{}
     else:
         return "Please describe the symptoms that the patient is exhibiting",1,patient_id
     
 def question_1(model_endpoint,userinput):
+    """Processes symptoms, passes through spell check, and NER model if there are no 
+    misspelled words. """
     global orig_sent
-    orig_sent = userinput.strip()
     global d
     global options
+    orig_sent = userinput.strip()
     d = spellcheck2(preprocess(userinput),symspell1)
     if len(d) == 0:
         symptoms = extraction(userinput,ner1)
@@ -161,14 +153,18 @@ def question_1(model_endpoint,userinput):
         return response,1.1,{}
  
 def spelling_state_1(model_endpoint,userinput):
+    """Processes spelling mistakes and returns the next Q"""
     global orig_sent
     global d
     global options
+    #Validate user response
     if not userinput.isdigit() or (int(userinput) not in options):
         return "Please enter a valid selection",1.1,{}
+    #Replace the word, drop the row from the database
     else:
         orig_sent = replace_word(d.iloc[0],userinput,orig_sent)
         d.drop(d.index[0],inplace = True)
+    #If there are more words, repeat the process
     if len(d)>=1:
         response,options = numbered_print(d.iloc[0])
         return response,1.1,{}
@@ -179,6 +175,7 @@ def spelling_state_1(model_endpoint,userinput):
 	
 
 def question_2(model_endpoint,userinput):
+    """Processes severity level, returns next Q"""
     if userinput.strip().lower() not in ['e1','e2','e3','e4']:
         return "Please enter a valid severity level",2,{}
     else:
@@ -186,6 +183,7 @@ def question_2(model_endpoint,userinput):
         return "Is the patient oriented --> (Yes, No, Somewhat, Unknown)",3,severity_level
 
 def question_3(model_endpoint,userinput):
+    """Processes patient orientation, returns next Q"""
     if userinput.strip().lower() not in ['yes','no','somewhat','unknown']:
         return "Please enter a valid response",3,{}
     else:
@@ -193,6 +191,7 @@ def question_3(model_endpoint,userinput):
         return "Is the patient able to understand you --> (Yes, No, Somewhat, Unknown)",4,oriented
 
 def question_4(model_endpoint,userinput):
+    """Processes patient understanding"""
     if userinput.strip().lower() not in ['yes','no','somewhat','unknown']:
         return "Please enter a valid response",4,{}
     else:
@@ -200,6 +199,7 @@ def question_4(model_endpoint,userinput):
         return "Are you able to understand the patient --> (Yes, No, Somewhat, Unknown)",5,patient_understand
 
 def question_5(model_endpoint,userinput):
+    """Processes user understanding patient and return the next Q"""
     if userinput.strip().lower() not in ['yes','no','somewhat','unknown']:
         return "Please enter a valid response",5,{}
     else:
@@ -220,6 +220,7 @@ def question_8(model_endpoint,userinput):
     return "Please describe the associated features",9,precipitating_factors
 
 def question_9(model_endpoint,userinput):
+    """Processes associated features, pass through spell check"""
     global orig_sent
     orig_sent = userinput.strip()
     global d
@@ -233,6 +234,7 @@ def question_9(model_endpoint,userinput):
         return response,9.1,{}
 
 def spelling_state_2(model_endpoint,userinput):
+    """repeat spellcheck for all words, pass through NER model"""
     global orig_sent
     global d
     global options
@@ -254,6 +256,7 @@ def question_10(model_endpoint,userinput):
     return "Please list the patient's medical history. \nInclude medical conditions and stroke/risk factors",11,previous_episodes
 
 def question_11(model_endpoint,userinput):
+    """Processes medical history, passes through spellcheck"""
     global orig_sent
     orig_sent = userinput.strip()
     global d
@@ -267,6 +270,7 @@ def question_11(model_endpoint,userinput):
         return response,11.1,{}
 
 def spelling_state_3(model_endpoint,userinput):
+    """Processes spellcheck for each word, passes through NER model"""
     global orig_sent
     global d
     global options
@@ -288,6 +292,7 @@ def question_12(model_endpoint,userinput):
     return "Please describe the patient's drug history. \nPrescription and over the counter",13,allergies
 
 def question_13(model_endpoint,userinput):
+    """Process drug history, pass through spell check"""
     global orig_sent
     orig_sent = userinput.strip()
     global d
@@ -301,6 +306,7 @@ def question_13(model_endpoint,userinput):
         return response,13.1,{}
 
 def spelling_state_4(model_endpoint,userinput):
+    """Pass each word through spell check, offer suggestions, pass through NER"""
     global orig_sent
     global d
     global options
@@ -330,290 +336,5 @@ def question_15(model_endpoint,userinput):
 
 
 def end(model_endpoint, userinput):
+    """restart app after completing interaction"""
     return "restarting app...\n\n" + get_opening_message(), 0, {}
-
-
-# #Create a form
-# form = []
-# #Q.1
-# print("Bot: Hello, Please describe the symptoms that the patient is exhibiting.")
-# userinput = input()
-
-# #Spellchecking step
-# list_suggestions = spellcheck(preprocess(userinput),symspell1)
-
-# #Asking the user to select the appropriate correction for the misspelled word
-# for word,recommendations in list_suggestions.items():
-#     for instance in recommendations:
-#         if instance in new_sw:
-#             break
-#         response = input("Bot: Did you mean {} instead of {} ".format(instance,word))
-#         if response.lower() == 'yes':
-#         #Replaces the word in the original sentence
-#             userinput = userinput.replace(word,instance,1)
-#             break
-#         else:
-#             continue            
-# #Use NER to extract the symptoms and store it in a list
-# list_symptoms = extraction(userinput,ner1)
-# form.append(list_symptoms)
-        
-# #Q.2
-# print("Bot: Please describe the severity of the patient, E1, E2, E3, E4")
-# flag = True
-# while (flag):
-    
-#     userinput = input()
-#     if userinput.strip().lower() not in ['e1','e2','e3','e4']:
-#         print("Bot: Please enter a valid severity level")
-#     else:
-#         flag = False
-#         severity_level = userinput.strip()
-# form.append(severity_level)
-    
-# #Q.3
-# print("Bot: Is the patient oriented, (Yes, No. Somewhat, Unknown)")
-# flag = True
-# while (flag):
-#     userinput = input()
-#     if userinput.strip().lower() not in ['yes','no','somewhat','unknown']:
-#         print("Bot: Please enter a valid response")
-#     else:
-#         flag =False
-#         oriented = userinput.strip()
-# form.append(oriented)
-    
-# #Q.4
-# print("Bot: Is the patient able to understand you? (Yes, No, Somewhat, Unknown)")
-# flag = True
-# while (flag):
-    
-#     userinput = input()
-#     if userinput.strip().lower() not in ['yes','no','somewhat','unknown']:
-#         print("Bot: Please enter a valid response")
-#     else:
-#         flag = False
-#         patient_understand = userinput.strip()
-# form.append(patient_understand)
-
-# #Q.5
-# print("Bot: Are you able to understand the patient? (Yes, No, Somewhat, Unknown)")
-# flag = True
-# while(flag):
-#     userinput = input()
-#     if userinput.strip().lower() not in ['yes','no','somewhat','unknown']:
-#         print("Bot: Please enter a valid response")
-#     else:
-#         flag = False
-#         user_understand_patient = userinput.strip()
-# form.append(user_understand_patient)
-        
-# #Q.6
-# print("Bot: When were the symptoms first noticed - how long has the patient been experiencing symptoms?")
-# userinput = input()
-# how_long_symptoms = userinput.strip()
-# form.append(how_long_symptoms)
-
-# #Q.7
-# print("Bot: Please describe the course - how have the symptoms evolved?")
-# userinput = input()
-# symptoms_evolution = userinput.strip()
-# form.append(symptoms_evolution)
-
-# #Q.8
-# print("Bot: Please describe the precipitating factors - What was the patient doing when the symptoms arose?")
-# userinput = input()
-# precipitating_factors = userinput.strip()
-# form.append(precipitating_factors)
-
-# #Q.9
-# print("Bot: Please describe the associated features")
-# userinput = input()
-# #Spellchecking step
-# list_suggestions = spellcheck(preprocess(userinput),symspell1)
-# #Asking the user to select the appropriate correction for the misspelled word
-# for word,recommendations in list_suggestions.items():
-#     for instance in recommendations:
-            
-#         if instance in new_sw:
-#             break
-#         response = input("Bot: Did you mean {} instead of {} ".format(instance,word))
-#         if response.lower() == 'yes':
-#         #Replaces the word in the original sentence
-#             userinput = userinput.replace(word,instance,1)
-#             break
-#         else:
-#             continue            
-# #Use NER to extract the symptoms and store it in a list
-# list_associated_features = extraction(userinput,ner1)
-# form.append(list_associated_features)
-
-
-# #Q.10
-# print("Bot: Please describe any previous episodes")
-# userinput  = input()
-# previous_episodes = userinput.strip()
-# form.append(previous_episodes)
-
-# #Q.11
-# print("Bot: Please list patient's past medical history - include medical conditions and stroke/risk factors")
-# userinput = input()
-# #Spellchecking step
-# list_suggestions = spellcheck(preprocess(userinput),symspell1)
-# #Asking the user to select the appropriate correction for the misspelled word
-# for word,recommendations in list_suggestions.items():
-#     for instance in recommendations:
-            
-#         if instance in new_sw:
-#             break
-#         response = input("Bot: Did you mean {} instead of {} ".format(instance,word))
-#         if response.lower() == 'yes':
-#         #Replaces the word in the original sentence
-#             userinput = userinput.replace(word,instance,1)
-#             break
-#         else:
-#             continue            
-# #Use NER to extract the symptoms and store it in a list
-# medical_history = extraction(userinput,ner1)
-# form.append(medical_history)
-
-
-# #Q.12
-# print("Bot: Please list any allergies the patient may have")
-# userinput = input()
-# #Spellchecking step
-# list_suggestions = spellcheck(preprocess(userinput),symspell1)
-# #Asking the user to select the appropriate correction for the misspelled word
-# for word,recommendations in list_suggestions.items():
-#     for instance in recommendations:
-            
-#         if instance in new_sw:
-#             break
-#         response = input("Bot: Did you mean {} instead of {} ".format(instance,word))
-#         if response.lower() == 'yes':
-#         #Replaces the word in the original sentence
-#             userinput = userinput.replace(word,instance,1)
-#             break
-#         else:
-#             continue            
-# #Use NER to extract the symptoms and store it in a list
-# allergies = extraction(userinput,ner1)
-# form.append(allergies)
-
-
-# #Q.13
-# print("Bot: Describe the patient's drug history, prescription and over the counter")
-# userinput = input()
-# #Spellchecking step
-# list_suggestions = spellcheck(preprocess(userinput),symspell2)
-# #Asking the user to select the appropriate correction for the misspelled word
-# for word,recommendations in list_suggestions.items():
-#     for instance in recommendations:
-            
-#         if instance in new_sw:
-#             break
-#         response = input("Bot: Did you mean {} instead of {} ".format(instance,word))
-#         if response.lower() == 'yes':
-#         #Replaces the word in the original sentence
-#             userinput = userinput.replace(word,instance,1)
-#             break
-#         else:
-#             continue            
-# #Use NER to extract the symptoms and store it in a list
-# drug_history = extraction(userinput,ner2)
-# form.append(drug_history)
-
-
-
-# #Q.14
-# print("Bot: Does the patient have a family history of stroke - (Yes, No, Unknown)")
-# flag = True
-# while (flag):
-#     userinput = input()
-#     if userinput.strip().lower() not in ['yes','no','unknown']:
-#         print("Bot: Please enter a valid response")
-    
-#     else:
-#         flag = False
-#         family_history = userinput.strip()
-# form.append(family_history)
-        
-# #Q.15
-# print("Bot: Describe the patient's social history")
-# userinput = input()
-# social_history = userinput.strip()  
-# form.append(social_history)
-
-
-# In[11]:
-
-
-# pd.DataFrame({'Info':form},index = ['symptoms','severity_level','patient_oriented','patient_understand','user_understand_patient',
-#                                    'how_long_symptoms','symptoms_evolved','precipitating_factors','associated_features',
-#                                    'previous_episodes','medical_history','allergies','drug_history','family_history','social_history'])
-
-
-# # Completed
-# 
-# 1. Included terms in the training data for NER-- garbled speech, delayed locomotion, shortness of breath, anxiety, reduced consciousness, locomotive dependency.
-# 2. Detected all symptoms mentioned in https://my.clevelandclinic.org/health/articles/13490-stroke-glossary,
-# Unable to detect 'high/low systolic blood pressure' and 'transient ischemic attack', but can detect 'TIA'.
-# 3. Changed the first question to "What symptoms is the patient exhibiting" to avoid accounting for scenarios that may include symptom name preceded by 'no' or 'not'.
-# 4. Include 'afebrile' in the spellcheck dictionary.
-# 5. Commas are now at the right place. The symptoms are extracted based on occurrences of B_Disease and I_Disease.
-# 6. Added code to not ask spelling suggestions for stopword list.
-# 
-# 
-# 
-
-# # Things to do 
-# 
-# 
-# 
-# 1. Include 'transient ischemic attack', 'shortness of breath', COPD.
-# 2. Think about what to do for allergies.
-# 3. Increase drug name spacy model accuracy.
-# 4. Ask the user to verify the symptoms.
-# 5. Include user id login information.
-# 6. Create functions for each question.
-# 7. Patient ID?
-# 8. SPellcheck only two questions
-# 9. If length of symptoms detected is zero, then ask the user if he/she wants to enter any symptoms. THis can cover for weird user responses like "I want chicken biryani"
-# 
-# 
-# 
-# 
-
-# # Test cases for entity recognition
-
-# In[6]:
-
-
-# ## FAIL. Does not detect drug names since the training data doesn't have any drug names at the moment
-# doc = ner2("rufinamide and clonazepam")
-# displacy.render(doc,jupyter=True, style = "ent")
-
-
-# In[5]:
-
-
-#Pass
-# doc = ner1("Bell's Palsy and Diabetes")
-# displacy.render(doc,jupyter=True, style = "ent")
-
-
-# In[3]:
-
-
-# #Pass
-# doc = ner1("epilepsy and COPD")
-# displacy.render(doc,jupyter=True, style = "ent")
-
-
-# In[4]:
-
-
-# #FAIL - doesnot detect garbled speech 
-# doc = ner1("The patient has garbled speech and possible indication of dysarthria")
-# displacy.render(doc,jupyter=True, style = "ent")
-

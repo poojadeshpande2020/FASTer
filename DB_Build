@@ -34,18 +34,18 @@ db.session.add(physician2)
 db.session.commit()
 
 
-patient1 = Patients (patientID = '111111',
-    patientFirstName = 'Donald' ,
-    patientLastName = 'Trump',
-    patientAddress1 = '123 Jefferson Way',
-    patientAddress2 = "Unit 123",
-    patientCity = 'Jefferson',
-    patientState = 'VA',
-    patientZip = '45678',
-    patientGender = 'M',
-    patientDOB = '1980-01-01',
-    insuranceID = 'BCBS010203',
-    insuranceCarrier = 'Blue Cross Blue Shield'
+patient1 = Patients (patientID = '567890',
+    patientFirstName = 'Jennifer' ,
+    patientLastName = 'Aniston',
+    patientAddress1 = '423 Orlean Ave',
+    patientAddress2 = "Dunbar",
+    patientCity = 'LA',
+    patientState = 'California',
+    patientZip = '100456',
+    patientGender = 'F',
+    patientDOB = '1960-01-01',
+    insuranceID = 'BCBS010333',
+    insuranceCarrier = 'Anthem'
 )
 db.session.add(patient1)
 db.session.commit()
