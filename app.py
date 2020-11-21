@@ -167,7 +167,7 @@ def create_xml(storage):
     updatedBy = "SYSADMIN"
     physicianID = '1234'
     phyisicanFirstName = Physician.query.filter_by(physicianID = '1234').first().physicianFirstName
-    physicianLastName = Physician.query.filter_by(physicianID = '1234').first().physicianFirstName
+    physicianLastName = Physician.query.filter_by(physicianID = '1234').first().physicianLastName
 
     root = ET.Element("patientevaluation")
     doc = ET.SubElement(root, "record")
