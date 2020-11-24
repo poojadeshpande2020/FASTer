@@ -193,6 +193,7 @@ def create_xml(storage):
     ET.SubElement(doc, "course").text = course
     ET.SubElement(doc, "precipitatingFactors").text = precipitatingFactors
     ET.SubElement(doc, "associatedFeatures").text = associatedFeatures
+    ET.SubElement(doc, "previousEpisodes").text = previousEpisodes
     ET.SubElement(doc, "pastMedicalHistory").text = pastMedicalHistory
     ET.SubElement(doc, "allergies").text = allergies
     ET.SubElement(doc, "drugHistory").text = drugHistory
